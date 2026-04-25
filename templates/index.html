@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAIRY // TERMINAL</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #050505;
+            --panel-bg: #111;
+            --primary: #F3FF00; /* Neon Yellow */
+            --accent: #00F0FF;  /* Cyan */
+            --text-main: #ccc;
+            --border-width: 2px;
+            --chamfer: 12px;
+        }
+
+        * { box-sizing: border-box; outline: none; }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Share Tech Mono', monospace;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- CRT Overlay --- */
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        /* --- Layout --- */
+        .app-container {
+            display: grid;
+            grid-template-rows: 50px 1fr;
+            height: 100%;
+            gap: 0;
+        }
+
+        /* --- Header --- */
+        .header {
+            background: var(--text-main);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-family: 'Black Ops One', cursive;
+            font-size: 20px;
+            border-bottom: 4px solid var(--primary);
+            z-index: 100;
+        }
+
+        .header-stats {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            display: flex;
+            gap: 20px;
+        }
+
+        /* --- Main Workspace --- */
+        .workspace {
+            display: grid;
+            grid-template-columns: 1fr 400px; /* Terminal | Controls */
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* --- Terminal (Left) --- */
+        .terminal-panel {
+            background: #000;
+            padding: 15px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            border-right: 2px solid #333;
+            position: relative;
+        }
+
+        .terminal-panel::-webkit-scrollbar { width: 8px; }
+        .terminal-panel::-webkit-scrollbar-track { background: #000; }
+        .terminal-panel::-webkit-scrollbar-thumb { background: #333; border: 1px solid #000; }
+
+        /* Log Styles */
+        .log-line { margin-bottom: 6px; border-bottom: 1px solid #111; padding-bottom: 2px; word-wrap: break-word; }
+        .log-ts { color: #555; margin-right: 8px; font-size: 12px; }
+        .log-sender { font-weight: bold; margin-right: 5px; text-transform: uppercase; }
+        
+        .log-info .log-sender { color: var(--text-main); }
+        .log-thinking .log-sender { color: var(--accent); }
+        .log-action .log-sender { color: var(--primary); }
+        .log-error .log-sender { color: #ff2a2a; }
+        .log-system { color: #fff; background: #222; padding: 4px; margin: 10px 0; border-left: 3px solid var(--accent); }
+        .log-final { color: var(--primary); font-weight: bold; margin-top: 10px; border-top: 1px dashed var(--primary); padding-top: 5px; }
+
+        /* --- Controls (Right) --- */
+        .controls-panel {
+            background: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-left: 1px solid #333;
+        }
+
+        /* 1. Status Monitor */
+        .monitor-box {
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+        .monitor-row {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+        }
+        .monitor-label { color: #666; font-size: 12px; }
+        .monitor-value { color: var(--accent); font-weight: bold; }
+        
+        .progress-track {
+            height: 6px; background: #222; width: 100%; margin-top: 5px;
+        }
+        .progress-fill {
+            height: 100%; background: var(--primary); width: 0%; transition: width 0.3s;
+        }
+
+        /* 2. Input Area */
+        .input-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .input-label {
+            color: var(--primary); font-size: 14px; font-weight: bold; letter-spacing: 1px;
+        }
+
+        textarea {
+            flex: 1;
+            background: #0a0a0a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 15px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            resize: none;
+            transition: border 0.2s;
+        }
+        textarea:focus { border-color: var(--accent); }
+
+        /* 3. Execute Button */
+        .btn-execute {
+            background: var(--primary);
+            color: #000;
+            border: none;
+            padding: 20px;
+            font-family: 'Black Ops One', cursive;
+            font-size: 22px;
+            cursor: pointer;
+            text-transform: uppercase;
+            clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+            transition: all 0.1s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-execute:hover {
+            background: #fff;
+            transform: translate(-2px, -2px);
+            box-shadow: 4px 4px 0 var(--accent);
+        }
+
+        .btn-execute:active {
+            transform: translate(0, 0);
+            box-shadow: none;
+        }
+
+        .btn-execute:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Utility */
+        .blink { animation: blinker 1.5s linear infinite; color: var(--primary); }
+        @keyframes blinker { 50% { opacity: 0; } }
+        
+        .active-indicator {
+            display: inline-block; width: 10px; height: 10px; background: #333; margin-right: 8px; border-radius: 50%;
+        }
+        .running .active-indicator { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="color:#000; background:var(--primary); padding: 2px 6px;">FAIRY_SYS</span>
+                <span style="font-size: 12px; opacity: 0.6;">V1.0 // WORKSPACE</span>
+            </div>
+            <div class="header-stats">
+                <span id="modelDisplay">MODEL: GLM-4.6</span>
+                <span id="clockDisplay">00:00:00</span>
+            </div>
+        </header>
+
+        <!-- Workspace -->
+        <div class="workspace">
+            <!-- Left: Terminal Output -->
+            <div class="terminal-panel" id="logContainer">
+                <div class="log-line log-system">
+                    <span class="log-ts">SYSTEM</span>
+                    <span>INITIALIZING ENVIRONMENT...</span>
+                </div>
+                <div class="log-line log-system">
+                    <span class="log-ts">SYSTEM</span>
+                    <span>SOCKET CONNECTION: STANDBY</span>
+                </div>
+                <div class="log-line log-info">
+                    <span class="log-ts">--:--:--</span>
+                    <span class="log-sender">[USER]</span>
+                    <span>Ready for directives.</span>
+                </div>
+            </div>
+
+            <!-- Right: Functional Controls -->
+            <div class="controls-panel">
+                
+                <!-- Status Monitor -->
+                <div class="monitor-box" id="agentStatusBox">
+                    <div class="monitor-row">
+                        <span class="monitor-label">AGENT STATUS</span>
+                        <span class="monitor-value" id="agentStateText" style="color: #555;">IDLE</span>
+                    </div>
+                    <div class="monitor-row" style="margin-top: 10px;">
+                        <span class="monitor-label">TOTAL TOKENS</span>
+                        <span class="monitor-value" id="tokenValue">0</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="tokenBar"></div>
+                    </div>
+                    <div style="text-align: right; font-size: 10px; color: #555; margin-top: 2px;" id="tokenPercent">0%</div>
+                </div>
+
+                <!-- Input -->
+                <div class="input-area">
+                    <div class="input-label">>> DIRECTIVE INPUT</div>
+                    <textarea id="taskInput" placeholder="Enter task description...&#10;Shift+Enter for new line, Enter to send."></textarea>
+                </div>
+
+                <!-- Action -->
+                <button class="btn-execute" id="executeBtn" onclick="sendTask()">
+                    EXECUTE SEQUENCE
+                </button>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Utilities ---
+        function getTimestamp() {
+            const now = new Date();
+            return now.toTimeString().split(' ')[0];
+        }
+
+        function updateClock() {
+            document.getElementById('clockDisplay').innerText = getTimestamp();
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- 2. DOM Elements ---
+        const socket = io();
+        const logContainer = document.getElementById('logContainer');
+        const taskInput = document.getElementById('taskInput');
+        const executeBtn = document.getElementById('executeBtn');
+        const agentStateText = document.getElementById('agentStateText');
+        const agentStatusBox = document.getElementById('agentStatusBox');
+        const tokenValue = document.getElementById('tokenValue');
+        const tokenBar = document.getElementById('tokenBar');
+        const tokenPercent = document.getElementById('tokenPercent');
+
+        const MAX_TOKENS = 32000; // Estimate for visual bar
+
+        // --- 3. Log Logic ---
+        function appendLog(sender, message, type) {
+            const div = document.createElement('div');
+            div.className = `log-line log-${type}`;
+            
+            // Handle Sender
+            const senderSpan = sender ? `<span class="log-sender">[${sender}]</span>` : '';
+            
+            // Handle Message (Escape HTML)
+            const safeMsg = message.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
+            
+            div.innerHTML = `
+                <span class="log-ts">${getTimestamp()}</span>
+                ${senderSpan}
+                <span>${safeMsg}</span>
+            `;
+            
+            logContainer.appendChild(div);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // --- 4. Socket Events ---
+
+        socket.on('connect', () => {
+            appendLog('System', 'Connected to Core.', 'info');
+        });
+
+        socket.on('disconnect', () => {
+            appendLog('System', 'Connection Lost.', 'error');
+            agentStateText.innerText = "OFFLINE";
+            agentStateText.style.color = "#ff2a2a";
+        });
+
+        socket.on('log', (data) => {
+            // data: { sender, message, type }
+            // 'type' maps to our CSS classes (info, thinking, action, error, system, final)
+            appendLog(data.sender, data.message, data.type);
+        });
+
+        socket.on('agent_status', (data) => {
+            const isRunning = data.status === 'active';
+            
+            if (isRunning) {
+                agentStateText.innerText = "RUNNING >>";
+                agentStateText.style.color = "var(--primary)";
+                agentStateText.classList.add('blink');
+                agentStatusBox.classList.add('running');
+                
+                executeBtn.disabled = true;
+                executeBtn.innerText = "PROCESSING...";
+                taskInput.disabled = true;
+            } else {
+                agentStateText.innerText = "IDLE";
+                agentStateText.style.color = "#00F0FF";
+                agentStateText.classList.remove('blink');
+                agentStatusBox.classList.remove('running');
+                
+                executeBtn.disabled = false;
+                executeBtn.innerText = "EXECUTE SEQUENCE";
+                taskInput.disabled = false;
+                taskInput.focus();
+            }
+        });
+
+        socket.on('token_stats', (data) => {
+            const total = data.total_tokens || 0;
+            tokenValue.innerText = total;
+            
+            const pct = Math.min((total / MAX_TOKENS) * 100, 100);
+            tokenBar.style.width = pct + '%';
+            tokenPercent.innerText = Math.floor(pct) + '%';
+            
+            if (pct > 80) tokenBar.style.background = '#ff2a2a';
+            else tokenBar.style.background = 'var(--primary)';
+        });
+
+        // --- 5. User Interaction ---
+        function sendTask() {
+            const prompt = taskInput.value.trim();
+            if (!prompt) return;
+
+            appendLog('USER', prompt, 'info'); // Echo user command
+            socket.emit('start_task', { prompt: prompt });
+            
+            taskInput.value = ''; // Clear input
+        }
+
+        // Keyboard Handling
+        taskInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!executeBtn.disabled) sendTask();
+            }
+        });
+
+    </script>
+</body>
+</html>
