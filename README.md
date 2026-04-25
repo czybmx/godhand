@@ -240,3 +240,242 @@ GodHand 内建白名单，默认支持以下命令：
 </p>
 
 
+# 🖐️ GodHand
+
+> A local AI agent that controls your entire computer through natural language
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-2.x-black?logo=flask)](https://flask.palletsprojects.com)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-orange)](https://ollama.com)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)]()
+
+---
+
+## ✨ Overview
+
+**GodHand** is a fully local AI agent system powered by [Ollama](https://ollama.com). You describe what you want in plain language, and GodHand autonomously plans and executes the task — writing code, running shell commands, managing files, controlling your mouse and keyboard — until the job is done.
+
+A real-time web interface streams every thought, tool call, and result directly to your browser as it happens.
+
+---
+
+## 🚀 Features
+
+### 🧠 Autonomous Agent Core
+- Driven by a local LLM via Ollama (default: `glm-4.6:cloud`; any compatible model works)
+- Multi-turn self-looping execution until task completion
+- Built-in consecutive error detection and automatic recovery
+- Manual stop at any time via the web UI
+
+### 📁 File System Operations
+| Tool | Description |
+|------|-------------|
+| `write_file` | Create or overwrite a file |
+| `read_file` | Read file content (auto-detects UTF-8 / GBK / Latin-1 encoding) |
+| `edit_file` | Precise line-level editing (replace / insert / delete) |
+| `search_in_file` | Keyword or regex search with context lines |
+| `list_files` | List directory contents with size and modification time |
+| `create_folder` | Create a directory |
+| `get_project_tree` | Visualize project structure (auto-filters node_modules, etc.) |
+
+### 💻 Shell Command Execution
+- Cross-platform: CMD on Windows, Bash on Linux/macOS
+- Built-in command allowlist covering Python, Node.js, Flutter, Git, Docker, and more
+- Configurable per-command timeout to prevent hangs
+- Output auto-truncated to prevent context overflow
+
+### 🖱️ GUI Control (requires PyAutoGUI)
+- **Mouse**: move, click (left/middle/right), drag, scroll
+- **Keyboard**: type text, press keys, trigger hotkeys (e.g. `Ctrl+C`)
+- **Browser**: cross-platform URL opener
+
+### 🌐 Real-Time Web Interface
+- Flask + SocketIO for live WebSocket streaming
+- Color-coded log types: `thinking` / `action` / `system` / `error` / `warning`
+- Live token usage stats (Prompt / Completion / Total)
+- Start and Stop task controls
+
+### 📝 Session Logging
+- Each session auto-generates a timestamped log file under `logs/`
+
+---
+
+## 📦 Installation
+
+### Prerequisites
+
+- Python 3.10+
+- [Ollama](https://ollama.com/download) installed and running
+- A model pulled locally, e.g.:
+  ```bash
+  ollama pull qwen2.5-coder:7b
+  ```
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/your-username/godhand.git
+cd godhand
+```
+
+### Install Dependencies
+
+```bash
+pip install flask flask-socketio ollama pyautogui
+```
+
+> `pyautogui` is only required for GUI control features. All other functionality works without it.
+
+---
+
+## ⚙️ Configuration
+
+All settings are controlled via **environment variables** — no source code changes needed:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama service URL |
+| `MODEL_NAME` | `glm-4.6:cloud` | Model to use |
+| `WORKSPACE_DIR` | `workspace` | Agent working directory |
+| `MAX_ITERATIONS` | `100000000` | Maximum agent loop iterations |
+| `COMMAND_TIMEOUT` | `120000` | Per-command timeout in seconds |
+| `SECRET_KEY` | `fairy_agent_secret_key` | Flask session secret |
+
+**Linux/macOS:**
+```bash
+export MODEL_NAME="qwen2.5-coder:7b"
+export WORKSPACE_DIR="./my_project"
+```
+
+**Windows CMD:**
+```cmd
+set MODEL_NAME=qwen2.5-coder:7b
+set WORKSPACE_DIR=.\my_project
+```
+
+---
+
+## 🎮 Usage
+
+### Start the Server
+
+```bash
+python run.py
+```
+
+You'll see:
+
+```
+============================================================
+GodHand Agent System
+============================================================
+Log file:   logs/agent_session_20250425_120000.txt
+Workspace:  workspace
+Ollama:     http://localhost:11434
+Model:      glm-4.6:cloud
+Max iters:  100000000
+Timeout:    120000s
+GUI:        True
+============================================================
+```
+
+### Open the Interface
+
+Navigate to:
+
+```
+http://localhost:5000
+```
+
+### Give a Task
+
+Type your task in natural language, for example:
+
+```
+Build a FastAPI application with user registration and login endpoints,
+store data in SQLite, and run tests to verify everything works.
+```
+
+GodHand will autonomously: plan → create files → install dependencies → write code → run tests → report results.
+
+### Health Check Endpoint
+
+```
+GET http://localhost:5000/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "ollama_connected": true,
+  "workspace": "workspace",
+  "model": "glm-4.6:cloud"
+}
+```
+
+---
+
+## 🏗️ Project Structure
+
+```
+godhand/
+├── run.py              # Main application (Agent core + Web server)
+├── workspace/          # Agent working directory (auto-created)
+├── logs/               # Session logs (auto-created)
+│   └── agent_session_YYYYMMDD_HHMMSS.txt
+└── templates/
+    └── index.html      # Web frontend
+```
+
+---
+
+## 🔧 Supported Toolchains
+
+GodHand's built-in allowlist covers:
+
+| Category | Tools |
+|----------|-------|
+| Python | `python` `pip` `pytest` `black` `mypy` `poetry` |
+| Node.js | `node` `npm` `npx` `yarn` `pnpm` `jest` `eslint` |
+| Mobile | `flutter` `dart` `adb` `gradle` |
+| Version Control | `git` `gh` `svn` |
+| Containers | `docker` `docker-compose` `kubectl` |
+| Compilers | `gcc` `g++` `go` `rustc` `cargo` `java` `javac` |
+| Databases | `mysql` `psql` `sqlite3` `redis-cli` `mongo` |
+| Network | `curl` `wget` `ssh` `scp` |
+| Shells | `bash` `sh` `powershell` `cmd` |
+
+---
+
+## 🛡️ Security Notes
+
+- File access is sandboxed to `WORKSPACE_DIR` by default
+- On Windows, user home and Program Files directories are additionally permitted
+- Command allowlist violations are logged (non-blocking) — tighten as needed
+- For maximum isolation, consider running inside a VM or container
+
+---
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome!
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit your changes: `git commit -m 'Add your feature'`
+4. Push the branch: `git push origin feature/your-feature`
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+Released under the [MIT License](LICENSE).
+
+---
+
+<p align="center">
+  Made with ❤️ · Powered by Ollama · <b>GodHand</b>
+</p>
